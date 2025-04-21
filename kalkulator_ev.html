@@ -53,7 +53,133 @@
   </style>
 </head>
 <body>
-<!-- Здесь должен быть весь калькуляторный блок с HTML и JS. Упростим вставку: -->
-<p>Wstaw tutaj wygenerowany kod HTML kalkulatora z edytora.</p>
+<div class="calculator-container">
+  <h2>Kalkulator przychodów ze stacji ładowania EV</h2>
+
+  <div class="form-group">
+    <label for="scenario">Wybierz scenariusz:</label>
+    <select id="scenario">
+      <option value="pessimistic">Pesymistyczny (20% wykorzystania)</option>
+      <option value="realistic" selected>Realistyczny (60% wykorzystania)</option>
+      <option value="optimistic">Optymistyczny (90% wykorzystania)</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label for="station-type">Typ stacji:</label>
+    <select id="station-type">
+      <option value="ac">AC (22 kW) - 18 500 zł</option>
+      <option value="dc50">DC (50 kW) - 130 500 zł</option>
+      <option value="dc150">DC (150 kW) - 300 000 zł</option>
+    </select>
+  </div>
+  <div class="form-group">
+    <label for="location-type">Typ lokalizacji:</label>
+    <select id="location-type">
+      <option value="city">Centrum miasta (8 sesji/dzień)</option>
+      <option value="shopping">Galeria handlowa (12 sesji/dzień)</option>
+      <option value="highway">Stacja przy trasie (20 sesji/dzień)</option>
+    </select>
+  </div>
+  <div class="form-group">
+    <label for="monthly-rent">Miesięczny koszt wynajmu miejsca (zł):</label>
+    <input type="number" id="monthly-rent" value="1500">
+  </div>
+  <div class="form-group">
+    <label for="station-count">Liczba stacji:</label>
+    <input type="number" id="station-count" value="1">
+  </div>
+  <div class="form-group">
+    <label for="lifetime">Czas działania stacji (lata): <span id="lifetime-value">10</span></label>
+    <input type="range" id="lifetime" min="1" max="25" value="10" oninput="document.getElementById('lifetime-value').textContent = this.value">
+  </div>
+
+  <div class="form-group">
+    <label for="inflation">Inflacja roczna (%):</label>
+    <input type="number" id="inflation" value="3">
+  </div>
+  <div class="form-group">
+    <label for="operational-costs">Koszty operacyjne miesięcznie (zł):</label>
+    <input type="number" id="operational-costs" value="300">
+  </div>
+  <div class="form-group">
+    <label for="service-costs">Opłaty serwisowe rocznie (zł):</label>
+    <input type="number" id="service-costs" value="1200">
+  </div>
+
+  <button onclick="calculate()">Oblicz</button>
+  <div class="results" id="results"></div>
+</div>
+
+<script>
+function calculate() {
+  const scenario = document.getElementById('scenario').value;
+  const type = document.getElementById('station-type').value;
+  const location = document.getElementById('location-type').value;
+  const monthlyRent = parseFloat(document.getElementById('monthly-rent').value);
+  const stationCount = parseInt(document.getElementById('station-count').value);
+  const lifetime = parseInt(document.getElementById('lifetime').value);
+  const inflation = parseFloat(document.getElementById('inflation').value) / 100;
+  const operationalCosts = parseFloat(document.getElementById('operational-costs').value);
+  const serviceCosts = parseFloat(document.getElementById('service-costs').value);
+
+  let utilization = 0.6;
+  if (scenario === 'pessimistic') utilization = 0.2;
+  if (scenario === 'optimistic') utilization = 0.9;
+
+  let sessionsPerDay = 8;
+  if (location === 'shopping') sessionsPerDay = 12;
+  if (location === 'highway') sessionsPerDay = 20;
+
+  let investmentPerStation = 0;
+  let avgRevenuePerSession = 0;
+  if (type === 'ac') {
+    investmentPerStation = 18500;
+    avgRevenuePerSession = 15;
+  } else if (type === 'dc50') {
+    investmentPerStation = 130500;
+    avgRevenuePerSession = 25;
+  } else {
+    investmentPerStation = 300000;
+    avgRevenuePerSession = 40;
+  }
+
+  const adjustedSessions = sessionsPerDay * utilization;
+  const monthlyRevenue = adjustedSessions * avgRevenuePerSession * 30 * stationCount;
+  const monthlyCosts = (monthlyRent + operationalCosts) * stationCount;
+  const monthlyProfit = monthlyRevenue - monthlyCosts;
+  const yearlyProfit = (monthlyProfit * 12) - (serviceCosts * stationCount);
+  const totalInvestment = investmentPerStation * stationCount;
+
+  let cumulativeProfit = 0;
+  let tableRows = "";
+  let cumulativeCosts = totalInvestment;
+  for (let year = 1; year <= lifetime; year++) {
+    let adjustedProfit = yearlyProfit * Math.pow(1 + inflation, year - 1);
+    cumulativeProfit += adjustedProfit;
+    let annualCosts = (monthlyCosts * 12 + serviceCosts * stationCount) * Math.pow(1 + inflation, year - 1);
+    cumulativeCosts += annualCosts;
+    tableRows += `<tr><td>${year}</td><td>${adjustedProfit.toFixed(2)} zł</td><td>${(annualCosts).toFixed(2)} zł</td><td>${cumulativeProfit.toFixed(2)} zł</td><td>${cumulativeCosts.toFixed(2)} zł</td></tr>`;
+  }
+
+  let roiYears = yearlyProfit > 0 ? totalInvestment / yearlyProfit : Infinity;
+  const warning = utilization < 0.15 ? '<p style="color:red;"><strong>Uwaga:</strong> Wykorzystanie poniżej 15% może oznaczać stałą stratę.</p>' : '';
+
+  document.getElementById('results').innerHTML = `
+    ${warning}
+    <p><strong>Miesięczny przychód:</strong> ${monthlyRevenue.toFixed(2)} zł</p>
+    <p><strong>Miesięczne koszty:</strong> ${monthlyCosts.toFixed(2)} zł</p>
+    <p><strong>Miesięczny zysk:</strong> ${monthlyProfit.toFixed(2)} zł</p>
+    <p><strong>Roczny zysk (po kosztach serwisu):</strong> ${yearlyProfit.toFixed(2)} zł</p>
+    <p><strong>Szacunkowy zwrot inwestycji:</strong> ${roiYears === Infinity ? 'nigdy (brak zysku)' : roiYears.toFixed(1) + ' lat'}</p>
+    <p><strong>Skumulowany zysk przez ${lifetime} lat (z inflacją):</strong> ${cumulativeProfit.toFixed(2)} zł</p>
+    <h3>Prognoza roczna:</h3>
+    <table>
+      <tr><th>Rok</th><th>Zysk roczny</th><th>Roczne koszty \(z inflacją\)</th><th>Skumulowany zysk</th><th>Skumulowane koszty</th></tr>
+      ${tableRows}
+    </table>
+  `;
+}
+</script>
 </body>
 </html>
